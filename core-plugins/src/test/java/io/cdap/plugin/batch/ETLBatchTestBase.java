@@ -74,6 +74,7 @@ import io.cdap.plugin.format.orc.output.OrcOutputFormatProvider;
 import io.cdap.plugin.format.parquet.input.ParquetInputFormatProvider;
 import io.cdap.plugin.format.parquet.output.ParquetOutputFormatProvider;
 import io.cdap.plugin.format.text.input.TextInputFormatProvider;
+import io.cdap.plugin.format.xls.input.XlsInputFormatProvider;
 import io.cdap.plugin.transform.JavaScriptTransform;
 import io.cdap.plugin.transform.ProjectionTransform;
 import org.apache.avro.file.DataFileStream;
@@ -174,6 +175,8 @@ public class ETLBatchTestBase extends HydratorTestBase {
                       Snappy.class);
     addPluginArtifact(NamespaceId.DEFAULT.artifact("formats-text", "4.0.0"), DATAPIPELINE_ARTIFACT_ID,
                       ImmutableSet.of(TextInputFormatProvider.PLUGIN_CLASS), TextInputFormatProvider.class);
+    addPluginArtifact(NamespaceId.DEFAULT.artifact("formats-xls", "4.0.0"), DATAPIPELINE_ARTIFACT_ID,
+            ImmutableSet.of(XlsInputFormatProvider.PLUGIN_CLASS), XlsInputFormatProvider.class);
   }
 
   protected List<GenericRecord> readOutput(TimePartitionedFileSet fileSet, Schema schema) throws IOException {

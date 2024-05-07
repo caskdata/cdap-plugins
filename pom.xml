@@ -39,6 +39,7 @@
     <module>format-orc</module>
     <module>format-parquet</module>
     <module>format-text</module>
+    <module>format-xls</module>
     <module>hbase-plugins</module>
     <module>http-plugins</module>
     <module>mongodb-plugins</module>
