@@ -21,7 +21,7 @@
   <parent>
     <artifactId>hydrator-plugins</artifactId>
     <groupId>io.cdap.plugin</groupId>
-    <version>2.11.5-SNAPSHOT</version>
+    <version>2.11.5</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 

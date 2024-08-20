@@ -20,7 +20,7 @@
 
   <groupId>io.cdap.plugin</groupId>
   <artifactId>hydrator-plugins</artifactId>
-  <version>2.11.5-SNAPSHOT</version>
+  <version>2.11.5</version>
   <packaging>pom</packaging>
   <name>Hydrator Plugin Collection</name>
   <description>A collection of plugins for CDAP</description>
