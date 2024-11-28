@@ -101,6 +101,42 @@
               "label": "False"
             }
           }
+        },
+        {
+          "widget-type": "toggle",
+          "label": "Terminate If Empty Row",
+          "name": "terminateIfEmptyRow",
+          "widget-attributes": {
+            "default": "false",
+            "on": {
+              "value": "true",
+              "label": "True"
+            },
+            "off": {
+              "value": "false",
+              "label": "False"
+            }
+          }
+        },
+        {
+          "widget-type": "select",
+          "label": "Select Sheet Using",
+          "name": "sheet",
+          "widget-attributes": {
+            "values": [
+              "Sheet Name",
+              "Sheet Number"
+            ],
+            "default": "Sheet Number"
+          }
+        },
+        {
+          "widget-type": "textbox",
+          "label": "Sheet Value",
+          "name": "sheetValue",
+          "widget-attributes": {
+            "default": "0"
+          }
         }
       ]
     },
@@ -499,11 +535,44 @@
     {
       "name": "skipHeader",
       "condition": {
-        "expression": "format == 'delimited' || format == 'csv' || format == 'tsv'"
+        "expression": "format == 'delimited' || format == 'csv' || format == 'tsv' || format == 'xls'"
       },
       "show": [
         {
           "name": "skipHeader"
+        }
+      ]
+    },
+    {
+      "name": "sheet",
+      "condition": {
+        "expression": "format == 'xls'"
+      },
+      "show": [
+        {
+          "name": "sheet"
+        }
+      ]
+    },
+    {
+      "name": "sheetValue",
+      "condition": {
+        "expression": "format == 'xls'"
+      },
+      "show": [
+        {
+          "name": "sheetValue"
+        }
+      ]
+    },
+    {
+      "name": "terminateIfEmptyRow",
+      "condition": {
+        "expression": "format == 'xls'"
+      },
+      "show": [
+        {
+          "name": "terminateIfEmptyRow"
         }
       ]
     }

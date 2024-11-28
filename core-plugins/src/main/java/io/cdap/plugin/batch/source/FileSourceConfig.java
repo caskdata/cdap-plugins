@@ -20,6 +20,7 @@ import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
+import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.format.FileFormat;
@@ -37,6 +38,9 @@ public class FileSourceConfig extends AbstractFileSourceConfig {
   public static final String NAME_FILE_SYSTEM_PROPERTIES = "fileSystemProperties";
   public static final String NAME_PATH = "path";
   public static final String NAME_FILE_ENCODING = "fileEncoding";
+  public static final String NAME_SHEET = "sheet";
+  public static final String NAME_SHEET_VALUE = "sheetValue";
+  public static final String NAME_TERMINATE_IF_EMPTY_ROW = "terminateIfEmptyRow";
 
   private static final Gson GSON = new Gson();
   private static final Type MAP_STRING_STRING_TYPE = new TypeToken<Map<String, String>>() { }.getType();
@@ -64,6 +68,25 @@ public class FileSourceConfig extends AbstractFileSourceConfig {
   @Nullable
   @Description("The maximum number of rows that will get investigated for automatic data type detection.")
   private Long sampleSize;
+
+  @Name(NAME_SHEET)
+  @Macro
+  @Nullable
+  @Description("Select the sheet by name or number. Default is 'Sheet Number'.")
+  private String sheet;
+
+  @Name(NAME_SHEET_VALUE)
+  @Macro
+  @Nullable
+  @Description("The name/number of the sheet to read from. If not specified, the first sheet will be read." +
+          "Sheet Number are 0 based, ie first sheet is 0.")
+  private String sheetValue;
+
+  @Name(NAME_TERMINATE_IF_EMPTY_ROW)
+  @Macro
+  @Nullable
+  @Description("Specify whether to stop reading after encountering the first empty row. Defaults to false.")
+  private String terminateIfEmptyRow;
   
   FileSourceConfig() {
     super();
