@@ -204,7 +204,6 @@ public class ExcelInputReader extends BatchSource<LongWritable, Object, Structur
       if (columnValue.length > 1) {
         String name = columnValue[0];
         String value = columnValue[1];
-
         if (columnMapping.containsKey(name)) {
           excelColumnValueMap.put(columnMapping.get(name), value);
         } else {
