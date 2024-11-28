@@ -18,7 +18,7 @@ package io.cdap.plugin.format.json.output;
 
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.dataset.lib.KeyValue;
-import io.cdap.cdap.format.StructuredRecordStringConverter;
+import io.cdap.plugin.format.BigDecimalAwareStructuredRecordStringConverter;
 import io.cdap.plugin.format.output.DelegatingOutputFormat;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -43,7 +43,8 @@ public class StructuredJsonOutputFormat extends DelegatingOutputFormat<NullWrita
   protected Function<StructuredRecord, KeyValue<NullWritable, Text>> getConversion(TaskAttemptContext context) {
     return record -> {
       try {
-        return new KeyValue<>(NullWritable.get(), new Text(StructuredRecordStringConverter.toJsonString(record)));
+        return new KeyValue<>(NullWritable.get(),
+                              new Text(BigDecimalAwareStructuredRecordStringConverter.toJsonString(record)));
       } catch (IOException e) {
         throw new RuntimeException("Unable to convert record into a json object", e);
       }

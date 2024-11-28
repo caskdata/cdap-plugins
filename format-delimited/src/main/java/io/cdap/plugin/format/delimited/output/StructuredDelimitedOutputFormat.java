@@ -19,7 +19,7 @@ package io.cdap.plugin.format.delimited.output;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.api.dataset.lib.KeyValue;
-import io.cdap.cdap.format.StructuredRecordStringConverter;
+import io.cdap.plugin.format.BigDecimalAwareStructuredRecordStringConverter;
 import io.cdap.plugin.format.output.DelegatingOutputFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
@@ -63,8 +63,9 @@ public class StructuredDelimitedOutputFormat extends DelegatingOutputFormat<Null
   @Override
   protected Function<StructuredRecord, KeyValue<NullWritable, Text>> getConversion(TaskAttemptContext context) {
     String delimiter = getDelimiter(context.getConfiguration());
-    return record -> new KeyValue<>(NullWritable.get(),
-                                    new Text(StructuredRecordStringConverter.toDelimitedString(record, delimiter)));
+    return record -> new KeyValue<>(
+      NullWritable.get(), new Text(BigDecimalAwareStructuredRecordStringConverter.toDelimitedString(record, delimiter))
+    );
   }
 
   @Nullable
