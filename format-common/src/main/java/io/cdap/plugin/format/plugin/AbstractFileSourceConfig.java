@@ -42,6 +42,7 @@ public abstract class AbstractFileSourceConfig extends PluginConfig implements F
   public static final String DEFAULT_FILE_ENCODING = "UTF-8";
 
   @Description("Name be used to uniquely identify this source for lineage, annotating metadata, etc.")
+  @Nullable
   private String referenceName;
 
   @Macro
@@ -141,7 +142,9 @@ public abstract class AbstractFileSourceConfig extends PluginConfig implements F
   }
 
   public void validate(FailureCollector collector) {
-    IdUtils.validateReferenceName(referenceName, collector);
+    if (!Strings.isNullOrEmpty(referenceName)) {
+      IdUtils.validateReferenceName(referenceName, collector);
+    }
     try {
       getSchema();
     } catch (IllegalArgumentException e) {

@@ -8,6 +8,5 @@ Feature:File Sink - Verify File Sink Plugin Error scenarios
     Then Navigate to the properties page of plugin: "File"
     Then Click on the Validate button
     Then Verify mandatory property error for below listed properties:
-      | referenceName |
       | path          |
       | format        |
