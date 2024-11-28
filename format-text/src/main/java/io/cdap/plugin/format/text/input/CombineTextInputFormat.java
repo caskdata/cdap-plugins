@@ -51,9 +51,7 @@ import javax.annotation.Nullable;
  * as the first record for each split.
  */
 public class CombineTextInputFormat extends CombineFileInputFormat<NullWritable, StructuredRecord> {
-  static final String HEADER = "combine.path.tracking.header";
-  static final String SKIP_HEADER = "skip_header";
-
+  
   /**
    * Converts the CombineFileSplits derived by CombineFileInputFormat into CombineHeaderFileSplits
    * that optionally keep track of the header for each file.
@@ -122,7 +120,7 @@ public class CombineTextInputFormat extends CombineFileInputFormat<NullWritable,
     throws IOException {
     CombineHeaderFileSplit combineSplit = (CombineHeaderFileSplit) split;
     if (combineSplit.getHeader() != null) {
-      context.getConfiguration().set(HEADER, combineSplit.getHeader());
+      context.getConfiguration().set(PathTrackingTextInputFormat.HEADER, combineSplit.getHeader());
     }
     return new CombineFileRecordReader<>(combineSplit, context, WrapperReader.class);
   }

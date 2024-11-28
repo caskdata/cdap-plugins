@@ -35,6 +35,11 @@ import javax.annotation.Nullable;
  * Text format that tracks which file each record was read from.
  */
 public class PathTrackingTextInputFormat extends PathTrackingInputFormat {
+
+  static final String HEADER = "path.tracking.header";
+  static final String DISABLE_COMBINE = "path.tracking.disable.combine";
+  static final String SKIP_HEADER = "skip_header";
+
   private final boolean emittedHeader;
 
   /**
@@ -52,84 +57,9 @@ public class PathTrackingTextInputFormat extends PathTrackingInputFormat {
                                                                                     @Nullable String pathField,
                                                                                     Schema schema) {
     RecordReader<LongWritable, Text> delegate = getDefaultRecordReaderDelegate(split, context);
-    String header = context.getConfiguration().get(CombineTextInputFormat.HEADER);
-    boolean skipHeader = context.getConfiguration().getBoolean(CombineTextInputFormat.SKIP_HEADER, false);
+    String header = context.getConfiguration().get(HEADER);
+    boolean skipHeader = context.getConfiguration().getBoolean(SKIP_HEADER, false);
     return new TextRecordReader(delegate, schema, emittedHeader, header, skipHeader);
   }
 
-  /**
-   * Text record reader
-   */
-  static class TextRecordReader extends RecordReader<NullWritable, StructuredRecord.Builder> {
-    private final RecordReader<LongWritable, Text> delegate;
-    private final Schema schema;
-    private final String header;
-    private final boolean setOffset;
-    private final boolean skipHeader;
-    private boolean emittedHeader;
-
-    TextRecordReader(RecordReader<LongWritable, Text> delegate, Schema schema, boolean emittedHeader,
-                     @Nullable String header, boolean skipHeader) {
-      this.delegate = delegate;
-      this.schema = schema;
-      this.emittedHeader = emittedHeader;
-      this.header = header;
-      this.setOffset = schema.getField("offset") != null;
-      this.skipHeader = skipHeader;
-    }
-
-    @Override
-    public void initialize(InputSplit split, TaskAttemptContext context) throws IOException, InterruptedException {
-      delegate.initialize(split, context);
-    }
-
-    @Override
-    public boolean nextKeyValue() throws IOException, InterruptedException {
-      if (header != null && !emittedHeader) {
-        return true;
-      }
-
-      if (delegate.nextKeyValue()) {
-        // if this record is the actual header and we've already emitted the copied header or we want to skip header
-        if ((skipHeader || (header != null && emittedHeader)) && delegate.getCurrentKey().get() == 0L) {
-          return delegate.nextKeyValue();
-        }
-        return true;
-      }
-      return false;
-    }
-
-    @Override
-    public NullWritable getCurrentKey() {
-      return NullWritable.get();
-    }
-
-    @Override
-    public StructuredRecord.Builder getCurrentValue() throws IOException, InterruptedException {
-      StructuredRecord.Builder recordBuilder = StructuredRecord.builder(schema);
-      if (header != null && !emittedHeader) {
-        emittedHeader = true;
-        if (setOffset) {
-          recordBuilder.set("offset", 0L);
-        }
-        recordBuilder.set("body", header);
-      } else {
-        if (setOffset) {
-          recordBuilder.set("offset", delegate.getCurrentKey().get());
-        }
-        recordBuilder.set("body", delegate.getCurrentValue().toString());
-      }
-      return recordBuilder;
-    }
-
-    @Override
-    public float getProgress() throws IOException, InterruptedException {
-      return delegate.getProgress();
-    }
-
-    @Override
-    public void close() throws IOException {
-      delegate.close();
-    }
-  }
 }

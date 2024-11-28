@@ -30,6 +30,8 @@ import io.cdap.cdap.etl.api.validation.FormatContext;
 import io.cdap.cdap.etl.api.validation.ValidatingInputFormat;
 import io.cdap.plugin.format.input.PathTrackingConfig;
 import io.cdap.plugin.format.input.PathTrackingInputFormatProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -53,6 +55,7 @@ public class TextInputFormatProvider extends PathTrackingInputFormatProvider<Tex
                     "conf", TextConfig.TEXT_FIELDS);
   // this has to be here to be able to instantiate the correct plugin property field
   private final TextConfig conf;
+  private static final Logger LOG = LoggerFactory.getLogger(TextInputFormatProvider.class);
 
   public TextInputFormatProvider(TextConfig conf) {
     super(conf);
@@ -61,7 +64,13 @@ public class TextInputFormatProvider extends PathTrackingInputFormatProvider<Tex
 
   @Override
   public String getInputFormatClassName() {
-    return CombineTextInputFormat.class.getName();
+    Map<String, String> fsProperties = this.conf.getFileSystemProperties();
+    Boolean disableCombine = Boolean.valueOf(
+            fsProperties.getOrDefault(PathTrackingTextInputFormat.DISABLE_COMBINE, "false"));
+    String inputFormatClassName = disableCombine ? TextInputFormat.class.getName() :
+            CombineTextInputFormat.class.getName();
+    LOG.debug("format-text input format class : {}", inputFormatClassName);
+    return inputFormatClassName;
   }
 
   @Override
@@ -226,7 +235,7 @@ public class TextInputFormatProvider extends PathTrackingInputFormatProvider<Tex
   @Override
   protected void addFormatProperties(Map<String, String> properties) {
     super.addFormatProperties(properties);
-    properties.put(CombineTextInputFormat.SKIP_HEADER, String.valueOf(conf.getSkipHeader()));
+    properties.put(PathTrackingTextInputFormat.SKIP_HEADER, String.valueOf(conf.getSkipHeader()));
   }
 
   /**
