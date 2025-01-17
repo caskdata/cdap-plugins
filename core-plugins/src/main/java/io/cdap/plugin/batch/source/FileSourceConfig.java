@@ -124,7 +124,7 @@ public class FileSourceConfig extends AbstractFileSourceConfig {
     try {
       return GSON.fromJson(fileSystemProperties, MAP_STRING_STRING_TYPE);
     } catch (Exception e) {
-      throw new IllegalArgumentException("Unable to parse filesystem properties: " + e.getMessage(), e);
+      throw new IllegalArgumentException(String.format("Unable to parse filesystem properties: %s", e.getMessage()), e);
     }
   }
 

@@ -16,10 +16,14 @@
 
 package io.cdap.plugin.format.plugin;
 
+import com.google.common.base.Strings;
 import io.cdap.cdap.api.data.batch.Output;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.api.dataset.lib.KeyValue;
+import io.cdap.cdap.api.exception.ErrorCategory;
+import io.cdap.cdap.api.exception.ErrorType;
+import io.cdap.cdap.api.exception.ErrorUtils;
 import io.cdap.cdap.api.plugin.InvalidPluginConfigException;
 import io.cdap.cdap.api.plugin.InvalidPluginProperty;
 import io.cdap.cdap.api.plugin.PluginConfig;
@@ -28,6 +32,7 @@ import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.PipelineConfigurer;
 import io.cdap.cdap.etl.api.batch.BatchSink;
 import io.cdap.cdap.etl.api.batch.BatchSinkContext;
+import io.cdap.cdap.etl.api.exception.ErrorDetailsProviderSpec;
 import io.cdap.cdap.etl.api.validation.FormatContext;
 import io.cdap.cdap.etl.api.validation.ValidatingOutputFormat;
 import io.cdap.plugin.common.LineageRecorder;
@@ -99,11 +104,12 @@ public abstract class AbstractFileSink<T extends PluginConfig & FileSinkProperti
   }
 
   @Override
-  public void prepareRun(BatchSinkContext context) throws Exception {
+  public void prepareRun(BatchSinkContext context) {
     FailureCollector collector = context.getFailureCollector();
     config.validate(collector, context.getArguments().asMap());
     String format = config.getFormatName();
-    ValidatingOutputFormat validatingOutputFormat = getOutputFormatForRun(context);
+    ValidatingOutputFormat validatingOutputFormat = null;
+    validatingOutputFormat = getOutputFormatForRun(context, collector);
     FormatContext formatContext = new FormatContext(collector, context.getInputSchema());
     validateOutputFormatProvider(formatContext, format, validatingOutputFormat);
     collector.getOrThrowException();
@@ -124,12 +130,21 @@ public abstract class AbstractFileSink<T extends PluginConfig & FileSinkProperti
     Map<String, String> outputProperties = new HashMap<>(validatingOutputFormat.getOutputFormatConfiguration());
     outputProperties.putAll(getFileSystemProperties(context));
     outputProperties.put(FileOutputFormat.OUTDIR, getOutputDir(context));
+    if (!Strings.isNullOrEmpty(getErrorDetailsProviderClassName())) {
+      context.setErrorDetailsProvider(
+          new ErrorDetailsProviderSpec(getErrorDetailsProviderClassName()));
+    }
     context.addOutput(Output.of(config.getReferenceName(),
                                 new SinkOutputFormatProvider(validatingOutputFormat.getOutputFormatClassName(),
                                                              outputProperties)));
   }
 
-  protected ValidatingOutputFormat getOutputFormatForRun(BatchSinkContext context) throws InstantiationException {
+  protected String getErrorDetailsProviderClassName() {
+    return null;
+  }
+
+  protected ValidatingOutputFormat getOutputFormatForRun(BatchSinkContext context,
+      FailureCollector collector) {
     String fileFormat = config.getFormatName();
     try {
       return context.newPluginInstance(fileFormat);
@@ -138,11 +153,21 @@ public abstract class AbstractFileSink<T extends PluginConfig & FileSinkProperti
       for (InvalidPluginProperty invalidProperty : e.getInvalidProperties()) {
         properties.add(invalidProperty.getName());
       }
-      String errorMessage = String.format("Format '%s' cannot be used because properties %s were not provided or " +
-                                            "were invalid when the pipeline was deployed. Set the format to a " +
-                                            "different value, or re-create the pipeline with all required properties.",
-                                          fileFormat, properties);
-      throw new IllegalArgumentException(errorMessage, e);
+      String errorMessage = String.format(
+          "Format '%s' cannot be used because properties %s were not provided or "
+              + "were invalid when the pipeline was deployed. Set the format to a "
+              + "different value, or re-create the pipeline with all required properties. %s: %s",
+          fileFormat, properties, e.getClass().getName(), e.getMessage());
+      throw ErrorUtils.getProgramFailureException(
+          new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN), errorMessage, errorMessage,
+          ErrorType.USER, false, e);
+    } catch (InstantiationException e) {
+      collector.addFailure(
+              String.format("Could not load the output format %s, %s: %s", fileFormat,
+                  e.getClass().getName(), e.getMessage()), null)
+        .withPluginNotFound(fileFormat, fileFormat, ValidatingOutputFormat.PLUGIN_TYPE)
+        .withStacktrace(e.getStackTrace());
+      throw collector.getOrThrowException();
     }
   }
 
@@ -189,9 +214,8 @@ public abstract class AbstractFileSink<T extends PluginConfig & FileSinkProperti
                                             @Nullable ValidatingOutputFormat validatingOutputFormat) {
     FailureCollector collector = context.getFailureCollector();
     if (validatingOutputFormat == null) {
-      collector.addFailure(
-        String.format("Could not find the '%s' output format plugin.", format), null)
-        .withPluginNotFound(format, format, ValidatingOutputFormat.PLUGIN_TYPE);
+      collector.addFailure(String.format("Could not load the output format %s.", format), null)
+          .withPluginNotFound(format, format, ValidatingOutputFormat.PLUGIN_TYPE);
     } else {
       validatingOutputFormat.validate(context);
     }

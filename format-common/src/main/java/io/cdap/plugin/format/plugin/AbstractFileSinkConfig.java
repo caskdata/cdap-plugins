@@ -20,6 +20,9 @@ import com.google.common.base.Strings;
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.data.schema.Schema;
+import io.cdap.cdap.api.exception.ErrorCategory;
+import io.cdap.cdap.api.exception.ErrorType;
+import io.cdap.cdap.api.exception.ErrorUtils;
 import io.cdap.cdap.api.plugin.PluginConfig;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.plugin.common.IdUtils;
@@ -90,8 +93,10 @@ public abstract class AbstractFileSinkConfig extends PluginConfig implements Fil
       try {
         new SimpleDateFormat(suffix);
       } catch (IllegalArgumentException e) {
-        collector.addFailure("Invalid suffix.", "Ensure provided suffix is valid.")
-          .withConfigProperty(NAME_SUFFIX).withStacktrace(e.getStackTrace());
+        collector.addFailure(
+                String.format("Invalid suffix, %s: %s", e.getClass().getName(), e.getMessage()),
+                "Ensure provided suffix is valid.").withConfigProperty(NAME_SUFFIX)
+            .withStacktrace(e.getStackTrace());
       }
     }
 
@@ -125,7 +130,11 @@ public abstract class AbstractFileSinkConfig extends PluginConfig implements Fil
     try {
       return Schema.parseJson(schema);
     } catch (IOException e) {
-      throw new IllegalArgumentException("Invalid schema: " + e.getMessage(), e);
+      String errorMessage = String.format("Invalid schema %s, %s: %s", schema,
+          e.getClass().getName(), e.getMessage());
+      throw ErrorUtils.getProgramFailureException(
+          new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN), errorMessage, errorMessage,
+          ErrorType.USER, false, e);
     }
   }
 

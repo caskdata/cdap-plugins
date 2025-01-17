@@ -23,9 +23,13 @@ import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.annotation.Name;
 import io.cdap.cdap.api.annotation.Plugin;
+import io.cdap.cdap.api.exception.ErrorCategory;
+import io.cdap.cdap.api.exception.ErrorType;
+import io.cdap.cdap.api.exception.ErrorUtils;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.batch.BatchSink;
 import io.cdap.cdap.etl.api.batch.BatchSinkContext;
+import io.cdap.plugin.batch.source.FileErrorDetailsProvider;
 import io.cdap.plugin.format.plugin.AbstractFileSink;
 import io.cdap.plugin.format.plugin.AbstractFileSinkConfig;
 
@@ -46,6 +50,11 @@ public class FileSink extends AbstractFileSink<FileSink.Conf> {
   public FileSink(Conf config) {
     super(config);
     this.config = config;
+  }
+
+  @Override
+  protected String getErrorDetailsProviderClassName() {
+    return FileErrorDetailsProvider.class.getName();
   }
 
   @Override
@@ -85,7 +94,8 @@ public class FileSink extends AbstractFileSink<FileSink.Conf> {
       try {
         getFSProperties();
       } catch (IllegalArgumentException e) {
-        collector.addFailure("File system properties must be a valid json.", null)
+        collector.addFailure(String.format("File system properties must be a valid json. %s: %s",
+                e.getClass().getName(), e.getMessage()), null)
           .withConfigProperty(NAME_FILE_SYSTEM_PROPERTIES).withStacktrace(e.getStackTrace());
       }
     }
@@ -97,7 +107,12 @@ public class FileSink extends AbstractFileSink<FileSink.Conf> {
       try {
         return GSON.fromJson(fileSystemProperties, MAP_TYPE);
       } catch (JsonSyntaxException e) {
-        throw new IllegalArgumentException("Unable to parse filesystem properties: " + e.getMessage(), e);
+        String errorMessage = String.format(
+            "Failed to parse filesystem properties %s with message: %s: %s", fileSystemProperties,
+            e.getClass().getName(), e.getMessage());
+        throw ErrorUtils.getProgramFailureException(
+            new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN), errorMessage, errorMessage,
+            ErrorType.USER, false, e);
       }
     }
   }

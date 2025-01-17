@@ -16,19 +16,23 @@
 
 package io.cdap.plugin.format.plugin;
 
+import com.google.common.base.Strings;
 import io.cdap.cdap.api.data.batch.Input;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.api.dataset.lib.KeyValue;
+import io.cdap.cdap.api.exception.ErrorCategory;
+import io.cdap.cdap.api.exception.ErrorType;
+import io.cdap.cdap.api.exception.ErrorUtils;
 import io.cdap.cdap.api.plugin.InvalidPluginConfigException;
 import io.cdap.cdap.api.plugin.InvalidPluginProperty;
 import io.cdap.cdap.api.plugin.PluginConfig;
-import io.cdap.cdap.api.plugin.PluginProperties;
 import io.cdap.cdap.etl.api.Emitter;
 import io.cdap.cdap.etl.api.FailureCollector;
 import io.cdap.cdap.etl.api.PipelineConfigurer;
 import io.cdap.cdap.etl.api.batch.BatchSource;
 import io.cdap.cdap.etl.api.batch.BatchSourceContext;
+import io.cdap.cdap.etl.api.exception.ErrorDetailsProviderSpec;
 import io.cdap.cdap.etl.api.validation.FormatContext;
 import io.cdap.cdap.etl.api.validation.ValidatingInputFormat;
 import io.cdap.plugin.common.LineageRecorder;
@@ -132,9 +136,9 @@ public abstract class AbstractFileSource<T extends PluginConfig & FileSourceProp
           schema = schemaDetector.detectSchema(config.getPath(), config.getFilePattern(),
                                                context, getFileSystemProperties(null));
         } catch (IOException e) {
-          context.getFailureCollector()
-            .addFailure("Error when trying to detect schema: " + e.getMessage(), null)
-            .withStacktrace(e.getStackTrace());
+          collector.addFailure(
+              String.format("Error when trying to detect schema, %s: %s ", e.getClass().getName(),
+                  e.getMessage()), null).withStacktrace(e.getStackTrace());
         }
       }
     }
@@ -150,11 +154,11 @@ public abstract class AbstractFileSource<T extends PluginConfig & FileSourceProp
   }
 
   @Override
-  public void prepareRun(BatchSourceContext context) throws Exception {
+  public void prepareRun(BatchSourceContext context) {
     FailureCollector collector = context.getFailureCollector();
     config.validate(collector);
     String fileFormat = config.getFormatName();
-    ValidatingInputFormat validatingInputFormat = getInputFormatForRun(context);
+    ValidatingInputFormat validatingInputFormat = getInputFormatForRun(context, collector);
 
     FormatContext formatContext = new FormatContext(collector, null);
     Schema schema = context.getOutputSchema() == null ?
@@ -162,15 +166,30 @@ public abstract class AbstractFileSource<T extends PluginConfig & FileSourceProp
     Pattern pattern = config.getFilePattern();
     if (schema == null) {
       SchemaDetector schemaDetector = new SchemaDetector(validatingInputFormat);
-      schema = schemaDetector.detectSchema(config.getPath(context), pattern,
-                                           formatContext, getFileSystemProperties(null));
+      try {
+        schema = schemaDetector.detectSchema(config.getPath(context), pattern,
+                                             formatContext, getFileSystemProperties(null));
+      } catch (IOException e) {
+        collector.addFailure(
+            String.format("Failed to auto-detect schema, %s: %s", e.getClass().getName(),
+                e.getMessage()), null).withStacktrace(e.getStackTrace());
+        collector.getOrThrowException();
+      }
     }
     formatContext = new FormatContext(collector, schema);
     validateInputFormatProvider(formatContext, fileFormat, validatingInputFormat);
     validatePathField(collector, schema);
     collector.getOrThrowException();
 
-    Job job = JobUtils.createInstance();
+    Job job = null;
+    try {
+      job = JobUtils.createInstance();
+    } catch (IOException e) {
+      collector.addFailure(
+          String.format("Failed to create job instance, %s: %s", e.getClass().getName(),
+              e.getMessage()), null).withStacktrace(e.getStackTrace());
+      collector.getOrThrowException();
+    }
     Configuration conf = job.getConfiguration();
 
     if (pattern != null) {
@@ -193,19 +212,42 @@ public abstract class AbstractFileSource<T extends PluginConfig & FileSourceProp
     }
 
     Path path = new Path(config.getPath(context));
-    FileSystem pathFileSystem = FileSystem.get(path.toUri(), conf);
+    FileSystem pathFileSystem = null;
+    try {
+      pathFileSystem = FileSystem.get(path.toUri(), conf);
+    } catch (IOException e) {
+      collector.addFailure(String.format("Error fetching FileSystem at path %s, %s: %s", path,
+          e.getClass().getName(), e.getMessage()), null).withStacktrace(e.getStackTrace());
+      collector.getOrThrowException();
+    }
 
-    FileStatus[] fileStatus = pathFileSystem.globStatus(path);
+    FileStatus[] fileStatus = null;
+    try {
+      fileStatus = pathFileSystem.globStatus(path);
+    } catch (IOException e) {
+      collector.addFailure(String.format("Failed to get file status for path %s, %s: %s", path,
+          e.getClass().getName(), e.getMessage()), null).withStacktrace(e.getStackTrace());
+      collector.getOrThrowException();
+    }
 
     String inputFormatClass;
     if (fileStatus == null) {
       if (config.shouldAllowEmptyInput()) {
         inputFormatClass = getEmptyInputFormatClassName();
       } else {
-        throw new IOException(String.format("Input path %s does not exist", path));
+        String errorReason = String.format("Input path %s does not exist", path);
+        throw ErrorUtils.getProgramFailureException(new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN),
+          errorReason, errorReason, ErrorType.USER, false, null);
       }
     } else {
-      FileInputFormat.addInputPath(job, path);
+      try {
+        FileInputFormat.addInputPath(job, path);
+      } catch (IOException e) {
+        collector.addFailure(
+            String.format("Failed to add input path %s, %s: %s", path, e.getClass().getName(),
+                e.getMessage()), null).withStacktrace(e.getStackTrace());
+        collector.getOrThrowException();
+      }
       FileInputFormat.setMaxInputSplitSize(job, config.getMaxSplitSize());
       inputFormatClass = validatingInputFormat.getInputFormatClassName();
       Configuration hConf = job.getConfiguration();
@@ -223,26 +265,41 @@ public abstract class AbstractFileSource<T extends PluginConfig & FileSourceProp
     for (Map.Entry<String, String> entry : getFileSystemProperties(context).entrySet()) {
       conf.set(entry.getKey(), entry.getValue());
     }
-
+    if (!Strings.isNullOrEmpty(getErrorDetailsProviderClassName())) {
+      context.setErrorDetailsProvider(
+          new ErrorDetailsProviderSpec(getErrorDetailsProviderClassName()));
+    }
     context.setInput(Input.of(config.getReferenceName(), new SourceInputFormatProvider(inputFormatClass, conf)));
   }
 
-  protected ValidatingInputFormat getInputFormatForRun(BatchSourceContext context)
-    throws InstantiationException {
+  protected String getErrorDetailsProviderClassName() {
+    return null;
+  }
+
+  protected ValidatingInputFormat getInputFormatForRun(BatchSourceContext context,
+      FailureCollector collector) {
     String fileFormat = config.getFormatName();
     try {
       return context.newPluginInstance(fileFormat);
     } catch (InvalidPluginConfigException e) {
       Set<String> properties = new HashSet<>(e.getMissingProperties());
-      for (InvalidPluginProperty invalidProperty: e.getInvalidProperties()) {
+      for (InvalidPluginProperty invalidProperty : e.getInvalidProperties()) {
         properties.add(invalidProperty.getName());
       }
       String errorMessage = String.format("Format '%s' cannot be used because properties %s "
-          + "were not provided or were invalid when the pipeline was deployed. "
-          + "Set the format to a different value, "
-          + "or re-create the pipeline with all required properties.",
-        fileFormat, properties);
-      throw new IllegalArgumentException(errorMessage, e);
+              + "were not provided or were invalid when the pipeline was deployed. "
+              + "Set the format to a different value, "
+              + "or re-create the pipeline with all required properties, %s: %s", fileFormat,
+          properties, e.getClass().getName(), e.getMessage());
+      throw ErrorUtils.getProgramFailureException(
+          new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN), errorMessage, errorMessage,
+          ErrorType.USER, false, e);
+    } catch (InstantiationException e) {
+      collector.addFailure(String.format("Could not load the input format %s. %s: %s", fileFormat,
+              e.getClass().getName(), e.getMessage()), null)
+          .withPluginNotFound(fileFormat, fileFormat, ValidatingInputFormat.PLUGIN_TYPE)
+          .withStacktrace(e.getStackTrace());
+      throw collector.getOrThrowException();
     }
   }
 

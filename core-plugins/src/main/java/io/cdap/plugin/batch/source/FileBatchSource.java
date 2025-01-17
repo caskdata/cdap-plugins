@@ -49,6 +49,11 @@ public class FileBatchSource extends AbstractFileSource<FileSourceConfig> {
   }
 
   @Override
+  protected String getErrorDetailsProviderClassName() {
+    return FileErrorDetailsProvider.class.getName();
+  }
+
+  @Override
   protected Map<String, String> getFileSystemProperties(BatchSourceContext context) {
     Map<String, String> properties = new HashMap<>(config.getFileSystemProperties());
     if (config.shouldCopyHeader()) {
