@@ -107,9 +107,8 @@ public class FileSink extends AbstractFileSink<FileSink.Conf> {
       try {
         return GSON.fromJson(fileSystemProperties, MAP_TYPE);
       } catch (JsonSyntaxException e) {
-        String errorMessage = String.format(
-            "Failed to parse filesystem properties %s with message: %s: %s", fileSystemProperties,
-            e.getClass().getName(), e.getMessage());
+        String errorMessage = String.format("Failed to parse filesystem properties %s, %s: %s",
+            fileSystemProperties, e.getClass().getName(), e.getMessage());
         throw ErrorUtils.getProgramFailureException(
             new ErrorCategory(ErrorCategory.ErrorCategoryEnum.PLUGIN), errorMessage, errorMessage,
             ErrorType.USER, false, e);
